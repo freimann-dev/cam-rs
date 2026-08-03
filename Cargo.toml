@@ -1,0 +1,13 @@
+[package]
+name = "esp32-camera-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-hal = { version = "1.1.1", features = ["esp32s3"] }
+esp-println = { version = "0.13", features = ["esp32s3"] }
+embassy-time = "0.4"
+
+[features]
+default = ["esp32s3"]
+esp32s3 = ["esp-hal/esp32s3"]
