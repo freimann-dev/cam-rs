@@ -1,145 +1,514 @@
-use esp_hal::lcd_cam::cam::{Config, VhdeMode};
+// #ifndef _OV5640_SETTINGS_H_
+// #define _OV5640_SETTINGS_H_
 
-pub const OV5640_ADDR: u8 = 0x3C;
-pub const OV5640_ID: u16 = 0x5640;
+// #include <stdint.h>
+// #include <stdbool.h>
+// #include "esp_attr.h"
+// #include "ov5640_regs.h"
 
-pub struct OV5640;
+// static const ratio_settings_t ratio_table[] = {
+//     //  mw,   mh,  sx,  sy,   ex,   ey, ox, oy,   tx,   ty
+//     { 2560, 1920,   0,   0, 2623, 1951, 32, 16, 2844, 1968 }, //4x3
+//     { 2560, 1704,   0, 110, 2623, 1843, 32, 16, 2844, 1752 }, //3x2
+//     { 2560, 1600,   0, 160, 2623, 1791, 32, 16, 2844, 1648 }, //16x10
+//     { 2560, 1536,   0, 192, 2623, 1759, 32, 16, 2844, 1584 }, //5x3
+//     { 2560, 1440,   0, 240, 2623, 1711, 32, 16, 2844, 1488 }, //16x9
+//     { 2560, 1080,   0, 420, 2623, 1531, 32, 16, 2844, 1128 }, //21x9
+//     { 2400, 1920,  80,   0, 2543, 1951, 32, 16, 2684, 1968 }, //5x4
+//     { 1920, 1920, 320,   0, 2543, 1951, 32, 16, 2684, 1968 }, //1x1
+//     { 1088, 1920, 736,   0, 1887, 1951, 32, 16, 1884, 1968 }  //9x16
+// };
 
-impl OV5640 {
-    /// Пины для ESP32-S3-EYE
-    pub const PINS: SensorPins = SensorPins {
-        sda: 4,
-        scl: 5,
-        xclk: 15,
-        pclk: 13,
-        vsync: 6,
-        href: 7,
-        d0: 11,
-        d1: 9,
-        d2: 8,
-        d3: 10,
-        d4: 12,
-        d5: 18,
-        d6: 17,
-        d7: 16,
-    };
+// #define REG_DLY 0xffff
+// #define REGLIST_TAIL 0x0000
 
-    pub const INIT_REGS: &'static [(u16, u8)] = &[
-        // 1. Сброс
-        (0x3103, 0x11),
-        (0x3008, 0x82),
-        (0x3008, 0x42),
-        // 2. Базовые настройки и PLL (КРИТИЧНО для генерации PCLK из 20 МГц XCLK)
-        (0x3017, 0x00),
-        (0x3018, 0x44),
-        (0x3019, 0x02),
-        (0x3034, 0x1A),
-        (0x3035, 0x21),
-        (0x3036, 0x69),
-        (0x3037, 0x10), // PLL для 20 МГц
-        (0x3108, 0x01),
-        (0x3630, 0x36),
-        (0x3631, 0x0e),
-        (0x3632, 0xe2),
-        (0x3633, 0x12),
-        (0x3621, 0xe0),
-        (0x3704, 0xa0),
-        (0x3703, 0x5a),
-        (0x3715, 0x78),
-        (0x3717, 0x01),
-        (0x370b, 0x60),
-        (0x3705, 0x1a),
-        (0x3905, 0x02),
-        (0x3906, 0x10),
-        (0x3901, 0x0a),
-        (0x3731, 0x12),
-        (0x3600, 0x08),
-        (0x3601, 0x33),
-        (0x302d, 0x60),
-        (0x3620, 0x52),
-        (0x371b, 0x20),
-        (0x471c, 0x50),
-        (0x3a13, 0x43),
-        (0x3a18, 0x00),
-        (0x3a19, 0xf8),
-        (0x3635, 0x13),
-        (0x3636, 0x03),
-        (0x3634, 0x40),
-        (0x3622, 0x01),
-        (0x3c01, 0x34),
-        (0x3c04, 0x28),
-        (0x3c05, 0x98),
-        (0x3c06, 0x00),
-        (0x3c07, 0x08),
-        (0x3c08, 0x00),
-        (0x3c09, 0x1c),
-        (0x3c0a, 0x9c),
-        (0x3c0b, 0x40),
-        // 3. Формат JPEG
-        (0x4300, 0x30),
-        (0x501f, 0x00),
-        (0x4400, 0x04),
-        (0x4407, 0x04),
-        (0x440e, 0x00),
-        (0x460b, 0x35),
-        (0x460c, 0x22),
-        (0x3824, 0x02),
-        (0x5000, 0xa7),
-        (0x5001, 0xa3),
-        // 4. Разрешение VGA (640x480) - как в вашем рабочем Arduino коде
-        (0x3800, 0x00),
-        (0x3801, 0x00),
-        (0x3802, 0x00),
-        (0x3803, 0x04),
-        (0x3804, 0x0a),
-        (0x3805, 0x3f),
-        (0x3806, 0x07),
-        (0x3807, 0x9b),
-        (0x3808, 0x02),
-        (0x3809, 0x80), // Width: 640
-        (0x380a, 0x01),
-        (0x380b, 0xe0), // Height: 480
-        (0x380c, 0x07),
-        (0x380d, 0xb0),
-        (0x380e, 0x03),
-        (0x380f, 0xd8),
-        (0x3810, 0x00),
-        (0x3811, 0x10),
-        (0x3812, 0x00),
-        (0x3813, 0x06),
-        (0x3814, 0x31),
-        (0x3815, 0x31),
-        // 5. Vflip и Hmirror (как в вашем Arduino коде)
-        (0x3820, 0x41),
-        (0x3821, 0x07),
-        // 6. Запуск стриминга
-        (0x3503, 0x00),
-        (0x4202, 0x00),
-    ];
+// ****************************************************************************************
 
-    /// Конфигурация DMA для этого сенсора
-    pub fn dma_config() -> Config {
-        Config::default()
-            .with_vh_de_mode(VhdeMode::VsyncHsync)
-            .with_invert_vsync(true)
-            .with_invert_h_enable(true)
-            .with_invert_pixel_clock(true)
-    }
+// static const DRAM_ATTR uint16_t sensor_default_regs[][2] = {
+//     {SYSTEM_CTROL0, 0x82},  // software reset
+//     {REG_DLY, 10}, // delay 10ms
+//     {SYSTEM_CTROL0, 0x42},  // power down
+
+//     //enable pll
+//     {0x3103, 0x13},
+
+//     //io direction
+//     {0x3017, 0xff},
+//     {0x3018, 0xff},
+
+//     {DRIVE_CAPABILITY, 0xc3},
+//     {CLOCK_POL_CONTROL, 0x21},
+
+//     {0x4713, 0x02},//jpg mode select
+
+//     {ISP_CONTROL_01, 0x83}, // turn color matrix, awb and SDE
+
+//     //sys reset
+//     {0x3000, 0x20}, // reset MCU
+//     {REG_DLY, 10}, // delay 10ms
+//     {0x3002, 0x1c},
+
+//     //clock enable
+//     {0x3004, 0xff},
+//     {0x3006, 0xc3},
+
+//     //isp control
+//     {0x5000, 0xa7},
+//     {ISP_CONTROL_01, 0xa3},//+scaling?
+//     {0x5003, 0x08},//special_effect
+
+//     //unknown
+//     {0x370c, 0x02},//!!IMPORTANT
+//     {0x3634, 0x40},//!!IMPORTANT
+
+//     //AEC/AGC
+//     {0x3a02, 0x03},
+//     {0x3a03, 0xd8},
+//     {0x3a08, 0x01},
+//     {0x3a09, 0x27},
+//     {0x3a0a, 0x00},
+//     {0x3a0b, 0xf6},
+//     {0x3a0d, 0x04},
+//     {0x3a0e, 0x03},
+//     {0x3a0f, 0x30},//ae_level
+//     {0x3a10, 0x28},//ae_level
+//     {0x3a11, 0x60},//ae_level
+//     {0x3a13, 0x43},
+//     {0x3a14, 0x03},
+//     {0x3a15, 0xd8},
+//     {0x3a18, 0x00},//gainceiling
+//     {0x3a19, 0xf8},//gainceiling
+//     {0x3a1b, 0x30},//ae_level
+//     {0x3a1e, 0x26},//ae_level
+//     {0x3a1f, 0x14},//ae_level
+
+//     //vcm debug
+//     {0x3600, 0x08},
+//     {0x3601, 0x33},
+
+//     //50/60Hz
+//     {0x3c01, 0xa4},
+//     {0x3c04, 0x28},
+//     {0x3c05, 0x98},
+//     {0x3c06, 0x00},
+//     {0x3c07, 0x08},
+//     {0x3c08, 0x00},
+//     {0x3c09, 0x1c},
+//     {0x3c0a, 0x9c},
+//     {0x3c0b, 0x40},
+
+//     {0x460c, 0x22},//disable jpeg footer
+
+//     //BLC
+//     {0x4001, 0x02},
+//     {0x4004, 0x02},
+
+//     //AWB
+//     {0x5180, 0xff},
+//     {0x5181, 0xf2},
+//     {0x5182, 0x00},
+//     {0x5183, 0x14},
+//     {0x5184, 0x25},
+//     {0x5185, 0x24},
+//     {0x5186, 0x09},
+//     {0x5187, 0x09},
+//     {0x5188, 0x09},
+//     {0x5189, 0x75},
+//     {0x518a, 0x54},
+//     {0x518b, 0xe0},
+//     {0x518c, 0xb2},
+//     {0x518d, 0x42},
+//     {0x518e, 0x3d},
+//     {0x518f, 0x56},
+//     {0x5190, 0x46},
+//     {0x5191, 0xf8},
+//     {0x5192, 0x04},
+//     {0x5193, 0x70},
+//     {0x5194, 0xf0},
+//     {0x5195, 0xf0},
+//     {0x5196, 0x03},
+//     {0x5197, 0x01},
+//     {0x5198, 0x04},
+//     {0x5199, 0x12},
+//     {0x519a, 0x04},
+//     {0x519b, 0x00},
+//     {0x519c, 0x06},
+//     {0x519d, 0x82},
+//     {0x519e, 0x38},
+
+//     //color matrix (Saturation)
+//     {0x5381, 0x1e},
+//     {0x5382, 0x5b},
+//     {0x5383, 0x08},
+//     {0x5384, 0x0a},
+//     {0x5385, 0x7e},
+//     {0x5386, 0x88},
+//     {0x5387, 0x7c},
+//     {0x5388, 0x6c},
+//     {0x5389, 0x10},
+//     {0x538a, 0x01},
+//     {0x538b, 0x98},
+
+//     //CIP control (Sharpness)
+//     {0x5300, 0x10},//sharpness
+//     {0x5301, 0x10},//sharpness
+//     {0x5302, 0x18},//sharpness
+//     {0x5303, 0x19},//sharpness
+//     {0x5304, 0x10},
+//     {0x5305, 0x10},
+//     {0x5306, 0x08},//denoise
+//     {0x5307, 0x16},
+//     {0x5308, 0x40},
+//     {0x5309, 0x10},//sharpness
+//     {0x530a, 0x10},//sharpness
+//     {0x530b, 0x04},//sharpness
+//     {0x530c, 0x06},//sharpness
+
+//     //GAMMA
+//     {0x5480, 0x01},
+//     {0x5481, 0x00},
+//     {0x5482, 0x1e},
+//     {0x5483, 0x3b},
+//     {0x5484, 0x58},
+//     {0x5485, 0x66},
+//     {0x5486, 0x71},
+//     {0x5487, 0x7d},
+//     {0x5488, 0x83},
+//     {0x5489, 0x8f},
+//     {0x548a, 0x98},
+//     {0x548b, 0xa6},
+//     {0x548c, 0xb8},
+//     {0x548d, 0xca},
+//     {0x548e, 0xd7},
+//     {0x548f, 0xe3},
+//     {0x5490, 0x1d},
+
+//     //Special Digital Effects (SDE) (UV adjust)
+//     {0x5580, 0x06},//enable brightness and contrast
+//     {0x5583, 0x40},//special_effect
+//     {0x5584, 0x10},//special_effect
+//     {0x5586, 0x20},//contrast
+//     {0x5587, 0x00},//brightness
+//     {0x5588, 0x00},//brightness
+//     {0x5589, 0x10},
+//     {0x558a, 0x00},
+//     {0x558b, 0xf8},
+//     {0x501d, 0x40},// enable manual offset of contrast
+
+//     //power on
+//     {0x3008, 0x02},
+
+//     //50Hz
+//     {0x3c00, 0x04},
+
+//     {REG_DLY, 300},
+//     {REGLIST_TAIL, 0x00}, // tail
+// };
+
+// **********************************************************************************
+
+// static const DRAM_ATTR uint16_t sensor_fmt_jpeg[][2] = {
+//     {FORMAT_CTRL, 0x00}, // YUV422
+//     {FORMAT_CTRL00, 0x30}, // YUYV
+//     {0x3002, 0x00},//0x1c to 0x00 !!!
+//     {0x3006, 0xff},//0xc3 to 0xff !!!
+//     {0x471c, 0x50},//0xd0 to 0x50 !!!
+//     {REGLIST_TAIL, 0x00}, // tail
+// };
+
+// static const DRAM_ATTR uint16_t sensor_fmt_raw[][2] = {
+//     {FORMAT_CTRL, 0x03}, // RAW (DPC)
+//     {FORMAT_CTRL00, 0x00}, // RAW
+//     {REGLIST_TAIL, 0x00}
+// };
+
+// static const DRAM_ATTR uint16_t sensor_fmt_grayscale[][2] = {
+//     {FORMAT_CTRL, 0x00}, // YUV422
+//     {FORMAT_CTRL00, 0x10}, // Y8
+//     {REGLIST_TAIL, 0x00}
+// };
+
+// static const DRAM_ATTR uint16_t sensor_fmt_yuv422[][2] = {
+//     {FORMAT_CTRL, 0x00}, // YUV422
+//     {FORMAT_CTRL00, 0x30}, // YUYV
+//     {REGLIST_TAIL, 0x00}
+// };
+
+// static const DRAM_ATTR uint16_t sensor_fmt_rgb565[][2] = {
+//     {FORMAT_CTRL, 0x01}, // RGB
+//     {FORMAT_CTRL00, 0x61}, // RGB565 (BGR)
+//     {REGLIST_TAIL, 0x00}
+// };
+
+// static const DRAM_ATTR uint8_t sensor_saturation_levels[9][11] = {
+//     {0x1d, 0x60, 0x03, 0x07, 0x48, 0x4f, 0x4b, 0x40, 0x0b, 0x01, 0x98},//-4
+//     {0x1d, 0x60, 0x03, 0x08, 0x54, 0x5c, 0x58, 0x4b, 0x0d, 0x01, 0x98},//-3
+//     {0x1d, 0x60, 0x03, 0x0a, 0x60, 0x6a, 0x64, 0x56, 0x0e, 0x01, 0x98},//-2
+//     {0x1d, 0x60, 0x03, 0x0b, 0x6c, 0x77, 0x70, 0x60, 0x10, 0x01, 0x98},//-1
+//     {0x1d, 0x60, 0x03, 0x0c, 0x78, 0x84, 0x7d, 0x6b, 0x12, 0x01, 0x98},//0
+//     {0x1d, 0x60, 0x03, 0x0d, 0x84, 0x91, 0x8a, 0x76, 0x14, 0x01, 0x98},//+1
+//     {0x1d, 0x60, 0x03, 0x0e, 0x90, 0x9e, 0x96, 0x80, 0x16, 0x01, 0x98},//+2
+//     {0x1d, 0x60, 0x03, 0x10, 0x9c, 0xac, 0xa2, 0x8b, 0x17, 0x01, 0x98},//+3
+//     {0x1d, 0x60, 0x03, 0x11, 0xa8, 0xb9, 0xaf, 0x96, 0x19, 0x01, 0x98},//+4
+// };
+
+// static const DRAM_ATTR uint8_t sensor_special_effects[7][4] = {
+//     {0x06, 0x40, 0x2c, 0x08},//Normal
+//     {0x46, 0x40, 0x28, 0x08},//Negative
+//     {0x1e, 0x80, 0x80, 0x08},//Grayscale
+//     {0x1e, 0x80, 0xc0, 0x08},//Red Tint
+//     {0x1e, 0x60, 0x60, 0x08},//Green Tint
+//     {0x1e, 0xa0, 0x40, 0x08},//Blue Tint
+//     {0x1e, 0x40, 0xa0, 0x08},//Sepia
+// };
+
+// static const DRAM_ATTR uint16_t sensor_regs_gamma0[][2] = {
+//     {0x5480, 0x01},
+//     {0x5481, 0x08},
+//     {0x5482, 0x14},
+//     {0x5483, 0x28},
+//     {0x5484, 0x51},
+//     {0x5485, 0x65},
+//     {0x5486, 0x71},
+//     {0x5487, 0x7d},
+//     {0x5488, 0x87},
+//     {0x5489, 0x91},
+//     {0x548a, 0x9a},
+//     {0x548b, 0xaa},
+//     {0x548c, 0xb8},
+//     {0x548d, 0xcd},
+//     {0x548e, 0xdd},
+//     {0x548f, 0xea},
+//     {0x5490, 0x1d}
+// };
+
+// static const DRAM_ATTR uint16_t sensor_regs_gamma1[][2] = {
+//     {0x5480, 0x1},
+//     {0x5481, 0x0},
+//     {0x5482, 0x1e},
+//     {0x5483, 0x3b},
+//     {0x5484, 0x58},
+//     {0x5485, 0x66},
+//     {0x5486, 0x71},
+//     {0x5487, 0x7d},
+//     {0x5488, 0x83},
+//     {0x5489, 0x8f},
+//     {0x548a, 0x98},
+//     {0x548b, 0xa6},
+//     {0x548c, 0xb8},
+//     {0x548d, 0xca},
+//     {0x548e, 0xd7},
+//     {0x548f, 0xe3},
+//     {0x5490, 0x1d}
+// };
+
+// static const DRAM_ATTR uint16_t sensor_regs_awb0[][2] = {
+//     {0x5180, 0xff},
+//     {0x5181, 0xf2},
+//     {0x5182, 0x00},
+//     {0x5183, 0x14},
+//     {0x5184, 0x25},
+//     {0x5185, 0x24},
+//     {0x5186, 0x09},
+//     {0x5187, 0x09},
+//     {0x5188, 0x09},
+//     {0x5189, 0x75},
+//     {0x518a, 0x54},
+//     {0x518b, 0xe0},
+//     {0x518c, 0xb2},
+//     {0x518d, 0x42},
+//     {0x518e, 0x3d},
+//     {0x518f, 0x56},
+//     {0x5190, 0x46},
+//     {0x5191, 0xf8},
+//     {0x5192, 0x04},
+//     {0x5193, 0x70},
+//     {0x5194, 0xf0},
+//     {0x5195, 0xf0},
+//     {0x5196, 0x03},
+//     {0x5197, 0x01},
+//     {0x5198, 0x04},
+//     {0x5199, 0x12},
+//     {0x519a, 0x04},
+//     {0x519b, 0x00},
+//     {0x519c, 0x06},
+//     {0x519d, 0x82},
+//     {0x519e, 0x38}
+// };
+
+// #endif
+
+/// Элемент таблицы инициализации сенсора
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensorCmd {
+    /// Запись значения `value` в 16-битный адрес регистра `reg`
+    WriteReg(u16, u8),
+    /// Пауза в миллисекундах
+    DelayMs(u32),
 }
 
-pub struct SensorPins {
-    pub sda: u8,
-    pub scl: u8,
-    pub xclk: u8,
-    pub pclk: u8,
-    pub vsync: u8,
-    pub href: u8,
-    pub d0: u8,
-    pub d1: u8,
-    pub d2: u8,
-    pub d3: u8,
-    pub d4: u8,
-    pub d5: u8,
-    pub d6: u8,
-    pub d7: u8,
-}
+// Константы спец-регистров для удобства (если они определены в вашем драйвере)
+pub const SYSTEM_CTROL0: u16 = 0x3008; // Замените на реальные значения из вашего C-файла
+pub const REG_DLY: u16 = 0xFFFF; // Использовалось в C-коде для задержки
+pub const DRIVE_CAPABILITY: u16 = 0x301a;
+pub const CLOCK_POL_CONTROL: u16 = 0x300c;
+pub const ISP_CONTROL_01: u16 = 0x5001;
+
+pub static SENSOR_DEFAULT_REGS: &[SensorCmd] = &[
+    // SensorCmd::WriteReg(SYSTEM_CTROL0, 0x82), // software reset
+    // SensorCmd::DelayMs(10),                   // delay 10ms
+    // SensorCmd::WriteReg(SYSTEM_CTROL0, 0x42), // power down
+    // enable pll
+    // SensorCmd::WriteReg(0x3103, 0x13),
+    // io direction
+    SensorCmd::WriteReg(0x3017, 0xFF),
+    // SensorCmd::WriteReg(0x3018, 0xFF),
+    // SensorCmd::WriteReg(DRIVE_CAPABILITY, 0xC3),
+    // SensorCmd::WriteReg(CLOCK_POL_CONTROL, 0x21),
+    // SensorCmd::WriteReg(0x4713, 0x02), // jpg mode select
+    // SensorCmd::WriteReg(ISP_CONTROL_01, 0x83), // turn color matrix, awb and SDE
+    // sys reset
+    // SensorCmd::WriteReg(0x3000, 0x20), // reset MCU
+    // SensorCmd::DelayMs(10),            // delay 10ms
+    // SensorCmd::WriteReg(0x3002, 0x1C),
+    // clock enable
+    // SensorCmd::WriteReg(0x3004, 0xFF),
+    // SensorCmd::WriteReg(0x3006, 0xC3),
+    // isp control
+    // SensorCmd::WriteReg(0x5000, 0xA7),
+    // SensorCmd::WriteReg(ISP_CONTROL_01, 0xA3), // +scaling?
+    // SensorCmd::WriteReg(0x5003, 0x08),         // special_effect
+    // unknown
+    // SensorCmd::WriteReg(0x370C, 0x02), // !!IMPORTANT
+    // SensorCmd::WriteReg(0x3634, 0x40), // !!IMPORTANT
+    // AEC/AGC
+    // SensorCmd::WriteReg(0x3A02, 0x03),
+    // SensorCmd::WriteReg(0x3A03, 0xD8),
+    // SensorCmd::WriteReg(0x3A08, 0x01),
+    // SensorCmd::WriteReg(0x3A09, 0x27),
+    // SensorCmd::WriteReg(0x3A0A, 0x00),
+    // SensorCmd::WriteReg(0x3A0B, 0xF6),
+    // SensorCmd::WriteReg(0x3A0D, 0x04),
+    // SensorCmd::WriteReg(0x3A0E, 0x03),
+    // SensorCmd::WriteReg(0x3A0F, 0x30), // ae_level
+    // SensorCmd::WriteReg(0x3A10, 0x28), // ae_level
+    // SensorCmd::WriteReg(0x3A11, 0x60), // ae_level
+    // SensorCmd::WriteReg(0x3A13, 0x43),
+    // SensorCmd::WriteReg(0x3A14, 0x03),
+    // SensorCmd::WriteReg(0x3A15, 0xD8),
+    // SensorCmd::WriteReg(0x3A18, 0x00), // gainceiling
+    // SensorCmd::WriteReg(0x3A19, 0xF8), // gainceiling
+    // SensorCmd::WriteReg(0x3A1B, 0x30), // ae_level
+    // SensorCmd::WriteReg(0x3A1E, 0x26), // ae_level
+    // SensorCmd::WriteReg(0x3A1F, 0x14), // ae_level
+    // vcm debug
+    // SensorCmd::WriteReg(0x3600, 0x08),
+    // SensorCmd::WriteReg(0x3601, 0x33),
+    // 50/60Hz
+    // SensorCmd::WriteReg(0x3C01, 0xA4),
+    // SensorCmd::WriteReg(0x3C04, 0x28),
+    // SensorCmd::WriteReg(0x3C05, 0x98),
+    // SensorCmd::WriteReg(0x3C06, 0x00),
+    // SensorCmd::WriteReg(0x3C07, 0x08),
+    // SensorCmd::WriteReg(0x3C08, 0x00),
+    // SensorCmd::WriteReg(0x3C09, 0x1C),
+    // SensorCmd::WriteReg(0x3C0A, 0x9C),
+    // SensorCmd::WriteReg(0x3C0B, 0x40),
+    // SensorCmd::WriteReg(0x460C, 0x22), // disable jpeg footer
+    // BLC
+    // SensorCmd::WriteReg(0x4001, 0x02),
+    // SensorCmd::WriteReg(0x4004, 0x02),
+    // AWB
+    // SensorCmd::WriteReg(0x5180, 0xFF),
+    // SensorCmd::WriteReg(0x5181, 0xF2),
+    // SensorCmd::WriteReg(0x5182, 0x00),
+    // SensorCmd::WriteReg(0x5183, 0x14),
+    // SensorCmd::WriteReg(0x5184, 0x25),
+    // SensorCmd::WriteReg(0x5185, 0x24),
+    // SensorCmd::WriteReg(0x5186, 0x09),
+    // SensorCmd::WriteReg(0x5187, 0x09),
+    // SensorCmd::WriteReg(0x5188, 0x09),
+    // SensorCmd::WriteReg(0x5189, 0x75),
+    // SensorCmd::WriteReg(0x518A, 0x54),
+    // SensorCmd::WriteReg(0x518B, 0xE0),
+    // SensorCmd::WriteReg(0x518C, 0xB2),
+    // SensorCmd::WriteReg(0x518D, 0x42),
+    // SensorCmd::WriteReg(0x518E, 0x3D),
+    // SensorCmd::WriteReg(0x518F, 0x56),
+    // SensorCmd::WriteReg(0x5190, 0x46),
+    // SensorCmd::WriteReg(0x5191, 0xF8),
+    // SensorCmd::WriteReg(0x5192, 0x04),
+    // SensorCmd::WriteReg(0x5193, 0x70),
+    // SensorCmd::WriteReg(0x5194, 0xF0),
+    // SensorCmd::WriteReg(0x5195, 0xF0),
+    // SensorCmd::WriteReg(0x5196, 0x03),
+    // SensorCmd::WriteReg(0x5197, 0x01),
+    // SensorCmd::WriteReg(0x5198, 0x04),
+    // SensorCmd::WriteReg(0x5199, 0x12),
+    // SensorCmd::WriteReg(0x519A, 0x04),
+    // SensorCmd::WriteReg(0x519B, 0x00),
+    // SensorCmd::WriteReg(0x519C, 0x06),
+    // SensorCmd::WriteReg(0x519D, 0x82),
+    // SensorCmd::WriteReg(0x519E, 0x38),
+    // color matrix (Saturation)
+    // SensorCmd::WriteReg(0x5381, 0x1E),
+    // SensorCmd::WriteReg(0x5382, 0x5B),
+    // SensorCmd::WriteReg(0x5383, 0x08),
+    // SensorCmd::WriteReg(0x5384, 0x0A),
+    // SensorCmd::WriteReg(0x5385, 0x7E),
+    // SensorCmd::WriteReg(0x5386, 0x88),
+    // SensorCmd::WriteReg(0x5387, 0x7C),
+    // SensorCmd::WriteReg(0x5388, 0x6C),
+    // SensorCmd::WriteReg(0x5389, 0x10),
+    // SensorCmd::WriteReg(0x538A, 0x01),
+    // SensorCmd::WriteReg(0x538B, 0x98),
+    // CIP control (Sharpness)
+    // SensorCmd::WriteReg(0x5300, 0x10), // sharpness
+    // SensorCmd::WriteReg(0x5301, 0x10), // sharpness
+    // SensorCmd::WriteReg(0x5302, 0x18), // sharpness
+    // SensorCmd::WriteReg(0x5303, 0x19), // sharpness
+    // SensorCmd::WriteReg(0x5304, 0x10),
+    // SensorCmd::WriteReg(0x5305, 0x10),
+    // SensorCmd::WriteReg(0x5306, 0x08), // denoise
+    // SensorCmd::WriteReg(0x5307, 0x16),
+    // SensorCmd::WriteReg(0x5308, 0x40),
+    // SensorCmd::WriteReg(0x5309, 0x10), // sharpness
+    // SensorCmd::WriteReg(0x530A, 0x10), // sharpness
+    // SensorCmd::WriteReg(0x530B, 0x04), // sharpness
+    // SensorCmd::WriteReg(0x530C, 0x06), // sharpness
+    // GAMMA
+    // SensorCmd::WriteReg(0x5480, 0x01),
+    // SensorCmd::WriteReg(0x5481, 0x00),
+    // SensorCmd::WriteReg(0x5482, 0x1E),
+    // SensorCmd::WriteReg(0x5483, 0x3B),
+    // SensorCmd::WriteReg(0x5484, 0x58),
+    // SensorCmd::WriteReg(0x5485, 0x66),
+    // SensorCmd::WriteReg(0x5486, 0x71),
+    // SensorCmd::WriteReg(0x5487, 0x7D),
+    // SensorCmd::WriteReg(0x5488, 0x83),
+    // SensorCmd::WriteReg(0x5489, 0x8F),
+    // SensorCmd::WriteReg(0x548A, 0x98),
+    // SensorCmd::WriteReg(0x548B, 0xA6),
+    // SensorCmd::WriteReg(0x548C, 0xB8),
+    // SensorCmd::WriteReg(0x548D, 0xCA),
+    // SensorCmd::WriteReg(0x548E, 0xD7),
+    // SensorCmd::WriteReg(0x548F, 0xE3),
+    // SensorCmd::WriteReg(0x5490, 0x1D),
+    // Special Digital Effects (SDE) (UV adjust)
+    // SensorCmd::WriteReg(0x5580, 0x06), // enable brightness and contrast
+    // SensorCmd::WriteReg(0x5583, 0x40), // special_effect
+    // SensorCmd::WriteReg(0x5584, 0x10), // special_effect
+    // SensorCmd::WriteReg(0x5586, 0x20), // contrast
+    // SensorCmd::WriteReg(0x5587, 0x00), // brightness
+    // SensorCmd::WriteReg(0x5588, 0x00), // brightness
+    // SensorCmd::WriteReg(0x5589, 0x10),
+    // SensorCmd::WriteReg(0x558A, 0x00),
+    // SensorCmd::WriteReg(0x558B, 0xF8),
+    // SensorCmd::WriteReg(0x501D, 0x40), // enable manual offset of contrast
+    // power on
+    // SensorCmd::WriteReg(0x3008, 0x02),
+    // 50Hz
+    // SensorCmd::WriteReg(0x3C00, 0x04),
+    // SensorCmd::DelayMs(300),
+    // REGLIST_TAIL не нужен в Rust: массив знает свой размер slice (.len())
+];
