@@ -48,7 +48,7 @@
 [package]
 name = "camera-rs"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [features]
 default = ["esp32s3"]
@@ -58,6 +58,7 @@ esp32s3 = []
 embassy-executor = "0.10.0"
 embassy-net = { version = "0.9.1", features = ["dhcpv4", "medium-ethernet", "tcp"] }
 embassy-time = { version = "0.5.0", features = ["generic-queue-8"] }
+embedded-hal = "1.0.0"
 embedded-io-async = "0.7.0"
 esp-alloc = "0.10.0"
 esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "println"] }

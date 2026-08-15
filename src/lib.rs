@@ -1,65 +1,65 @@
+// lib.rs
+
 #![no_std]
 
 pub mod platform;
 pub mod sensor;
 
 use esp_println::println;
-use platform::esp32s3::{Esp32S3Platform, Esp32S3Resources};
-use sensor::ov5640::{Ov5640, Ov5640Resources};
+use platform::Platform;
+use sensor::Sensor;
 
 #[derive(Debug)]
-pub enum CameraError {
-    PlatformInitFailed,
-    SensorInitFailed,
-    CaptureFailed,
+pub enum CameraError<PE, SE> {
+    PlatformError(PE),
+    SensorError(SE),
+}
+#[derive(Debug, Clone)]
+pub struct Frame {
+    pub width: usize,
+    pub height: usize,
+    pub data: &'static [u8],
 }
 
-pub struct Frame<'a> {
-    data: &'a [u8],
+pub struct Camera<P, S> {
+    pub platform: P,
+    pub sensor: S,
 }
 
-impl<'a> Frame<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
-        Self { data }
+impl<P, S> Camera<P, S>
+where
+    P: Platform,
+    S: Sensor,
+{
+    pub fn init(mut platform: P, mut sensor: S) -> Result<Self, CameraError<P::Error, S::Error>> {
+        platform
+            .xclk_on(20_000_000)
+            .map_err(CameraError::PlatformError)?;
+
+        // Ждём стабилизации clock
+        esp_hal::delay::Delay::new().delay_millis(100);
+        println!("[camera] ⏱ Waiting for sensor stabilization...");
+
+        // Инициализация сенсора: проверка Chip ID + активация DVP
+        sensor.init().map_err(CameraError::SensorError)?;
+
+        // Проверка PCLK
+        platform.verify_pclk().map_err(CameraError::PlatformError)?;
+
+        Ok(Self { platform, sensor })
     }
-    pub fn data(&self) -> &[u8] {
-        self.data
-    }
-}
+    pub fn capture(&self) -> Result<Frame, &'static str> {
+        static MOCK_FRAME: [u8; 12] = [
+            255, 0, 0, // Красный
+            0, 255, 0, // Зеленый
+            0, 0, 255, // Синий
+            255, 255, 0, // Желтый
+        ];
 
-pub struct CameraDriver<'d> {
-    platform: Esp32S3Platform<'d>,
-    _sensor: Ov5640<'d>,
-}
-
-impl<'d> CameraDriver<'d> {
-    pub fn new(
-        platform_res: Esp32S3Resources<'d>,
-        sensor_res: Ov5640Resources<'d>,
-    ) -> Result<Self, CameraError> {
-        println!("[camera-rs] Initializing Esp32S3 platform...");
-        let platform =
-            Esp32S3Platform::new(platform_res).map_err(|_| CameraError::PlatformInitFailed)?;
-
-        println!("[camera-rs] Initializing OV5640 sensor...");
-        let mut sensor = Ov5640::new(sensor_res).map_err(|_| CameraError::SensorInitFailed)?;
-
-        sensor.init().map_err(|_| CameraError::SensorInitFailed)?;
-
-        println!("[camera-rs] Driver initialized successfully.");
-
-        Ok(Self {
-            platform,
-            _sensor: sensor,
+        Ok(Frame {
+            width: 2,
+            height: 2,
+            data: &MOCK_FRAME,
         })
-    }
-
-    pub fn get_frame(&mut self) -> Result<Frame<'_>, CameraError> {
-        use platform::CameraPlatform;
-        let buf = self
-            .platform
-            .get_current_buffer()
-            .map_err(|_| CameraError::CaptureFailed)?;
-        Ok(Frame::new(buf))
     }
 }

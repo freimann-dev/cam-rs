@@ -1,26 +1,22 @@
+// esp32s3_eye_stream.rs
+
 #![no_std]
 #![no_main]
 
-use camera_rs::{
-    platform::esp32s3::{DvpPins, Esp32S3Resources},
-    sensor::ov5640::Ov5640Resources,
-    CameraDriver,
-};
+use camera_rs::Camera;
+use camera_rs::platform::esp32s3::Esp32S3;
+use camera_rs::sensor::ov5640::Ov5640;
 use embassy_executor::Spawner;
-use embassy_net::{tcp::TcpSocket, Config as NetConfig, Runner, Stack, StackResources};
+use embassy_net::{Config as NetConfig, Runner, Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
 use embedded_io_async::Write;
 use esp_backtrace as _;
 use esp_hal::{
-    clock::CpuClock,
-    gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull},
-    interrupt::software::SoftwareInterruptControl,
-    psram,
-    rng::Rng,
+    clock::CpuClock, interrupt::software::SoftwareInterruptControl, psram, rng::Rng,
     timer::timg::TimerGroup,
 };
 use esp_println::println;
-use esp_radio::wifi::{sta::StationConfig, Config, ControllerConfig, Interface, WifiController};
+use esp_radio::wifi::{Config, ControllerConfig, Interface, WifiController, sta::StationConfig};
 
 extern crate alloc;
 
@@ -95,78 +91,17 @@ async fn main(spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     // Камера
-    let dvp_pins = DvpPins {
-        xclk: Output::new(peripherals.GPIO15, Level::Low, OutputConfig::default()),
-        pclk: Input::new(
-            peripherals.GPIO13,
-            InputConfig::default().with_pull(Pull::None),
-        ),
-        vsync: Input::new(
-            peripherals.GPIO6,
-            InputConfig::default().with_pull(Pull::None),
-        ),
-        href: Input::new(
-            peripherals.GPIO7,
-            InputConfig::default().with_pull(Pull::None),
-        ),
-        data: [
-            Input::new(
-                peripherals.GPIO11,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO9,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO8,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO10,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO12,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO18,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO17,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-            Input::new(
-                peripherals.GPIO16,
-                InputConfig::default().with_pull(Pull::None),
-            ),
-        ],
-    };
-
-    let platform_res = Esp32S3Resources {
-        lcd_cam: peripherals.LCD_CAM,
-        dma_channel: peripherals.DMA_CH0,
-        pins: dvp_pins,
-    };
-
-    let sensor_res = Ov5640Resources {
-        i2c: peripherals.I2C0,
-        reset_pin: Some(Output::new(
-            peripherals.GPIO5,
-            Level::High,
-            OutputConfig::default(),
-        )),
-        pwdn_pin: Some(Output::new(
-            peripherals.GPIO38,
-            Level::Low,
-            OutputConfig::default(),
-        )),
-    };
-
-    let mut camera =
-        CameraDriver::new(platform_res, sensor_res).expect("Failed to initialize camera driver");
+    let pclk_pin =
+        esp_hal::gpio::Input::new(peripherals.GPIO13, esp_hal::gpio::InputConfig::default());
+    let platform = Esp32S3::new(
+        peripherals.LCD_CAM,
+        peripherals.DMA_CH0,
+        peripherals.GPIO15,
+        pclk_pin,
+    );
+    let sensor = Ov5640::new(peripherals.I2C0, peripherals.GPIO4, peripherals.GPIO5)
+        .expect("Failed to create OV5640 instance");
+    let camera = Camera::init(platform, sensor).expect("Failed to initialize camera");
 
     // WiFi
     let station_config = Config::Station(
@@ -235,19 +170,18 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         loop {
-            match camera.get_frame() {
-                Ok(frame) => {
-                    let frame_data = frame.data();
+            match camera.capture() {
+                Ok(frame_bytes) => {
                     let part_header = alloc::format!(
                         "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
-                        frame_data.len()
+                        frame_bytes.data.len()
                     );
 
                     if socket.write_all(part_header.as_bytes()).await.is_err() {
                         break;
                     }
 
-                    if socket.write_all(frame_data).await.is_err() {
+                    if socket.write_all(&frame_bytes.data).await.is_err() {
                         break;
                     }
 
@@ -255,8 +189,9 @@ async fn main(spawner: Spawner) -> ! {
                         break;
                     }
                 }
-                Err(_) => {
-                    Timer::after(Duration::from_millis(10)).await;
+                Err(e) => {
+                    println!("[http] camera.capture() error: {:?}", e);
+                    Timer::after(Duration::from_millis(100)).await;
                 }
             }
         }

@@ -1,3 +1,5 @@
+// mod.rs
+
 pub mod host;
 pub mod hosts;
 pub mod sccb;
@@ -6,7 +8,7 @@ pub mod sensor;
 use host::CameraHost;
 use sensor::CameraSensor;
 
-use esp_hal::{i2c::master::I2c, Blocking};
+use esp_hal::{Blocking, i2c::master::I2c};
 use esp_println::println;
 
 pub struct CameraDriver<'d, S: CameraSensor, H: CameraHost> {
