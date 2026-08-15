@@ -91,17 +91,30 @@ async fn main(spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     // Камера
-    let pclk_pin =
-        esp_hal::gpio::Input::new(peripherals.GPIO13, esp_hal::gpio::InputConfig::default());
+    // let pclk_pin_for_verify =
+    //     esp_hal::gpio::Input::new(peripherals.GPIO13, esp_hal::gpio::InputConfig::default());
     let platform = Esp32S3::new(
         peripherals.LCD_CAM,
         peripherals.DMA_CH0,
-        peripherals.GPIO15,
-        pclk_pin,
+        peripherals.GPIO15, // xclk
+        // pclk_pin_for_verify, // pclk для verify
+        peripherals.GPIO13, // pclk для camera
+        peripherals.GPIO6,  // vsync
+        peripherals.GPIO7,  // href
+        (
+            peripherals.GPIO11, // data0
+            peripherals.GPIO9,  // data1
+            peripherals.GPIO8,  // data2
+            peripherals.GPIO10, // data3
+            peripherals.GPIO12, // data4
+            peripherals.GPIO18, // data5
+            peripherals.GPIO17, // data6
+            peripherals.GPIO16, // data7
+        ),
     );
     let sensor = Ov5640::new(peripherals.I2C0, peripherals.GPIO4, peripherals.GPIO5)
         .expect("Failed to create OV5640 instance");
-    let camera = Camera::init(platform, sensor).expect("Failed to initialize camera");
+    let mut camera = Camera::init(platform, sensor).expect("Failed to initialize camera");
 
     // WiFi
     let station_config = Config::Station(
@@ -170,18 +183,19 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         loop {
-            match camera.capture() {
-                Ok(frame_bytes) => {
+            let mut frame_buf = [0u8; 65536];
+            match camera.capture(&mut frame_buf) {
+                Ok(len) => {
                     let part_header = alloc::format!(
                         "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
-                        frame_bytes.data.len()
+                        len
                     );
 
                     if socket.write_all(part_header.as_bytes()).await.is_err() {
                         break;
                     }
 
-                    if socket.write_all(&frame_bytes.data).await.is_err() {
+                    if socket.write_all(&frame_buf[..len]).await.is_err() {
                         break;
                     }
 
@@ -191,7 +205,7 @@ async fn main(spawner: Spawner) -> ! {
                 }
                 Err(e) => {
                     println!("[http] camera.capture() error: {:?}", e);
-                    Timer::after(Duration::from_millis(100)).await;
+                    break;
                 }
             }
         }

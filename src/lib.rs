@@ -14,12 +14,6 @@ pub enum CameraError<PE, SE> {
     PlatformError(PE),
     SensorError(SE),
 }
-#[derive(Debug, Clone)]
-pub struct Frame {
-    pub width: usize,
-    pub height: usize,
-    pub data: &'static [u8],
-}
 
 pub struct Camera<P, S> {
     pub platform: P,
@@ -48,18 +42,9 @@ where
 
         Ok(Self { platform, sensor })
     }
-    pub fn capture(&self) -> Result<Frame, &'static str> {
-        static MOCK_FRAME: [u8; 12] = [
-            255, 0, 0, // Красный
-            0, 255, 0, // Зеленый
-            0, 0, 255, // Синий
-            255, 255, 0, // Желтый
-        ];
-
-        Ok(Frame {
-            width: 2,
-            height: 2,
-            data: &MOCK_FRAME,
-        })
+    pub fn capture(&mut self, buf: &mut [u8]) -> Result<usize, CameraError<P::Error, S::Error>> {
+        self.platform
+            .capture_frame(buf)
+            .map_err(CameraError::PlatformError)
     }
 }
