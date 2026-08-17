@@ -1,18 +1,16 @@
-// esp32s3_eye_stream.rs
-
 #![no_std]
 #![no_main]
 
-use camera_rs::Camera;
-use camera_rs::platform::esp32s3::Esp32S3;
-use camera_rs::sensor::ov5640::Ov5640;
+use camera_rs::Driver;
+use camera_rs::board::esp32s3::Esp32S3;
+use camera_rs::camera::ov5640::Ov5640;
 use embassy_executor::Spawner;
 use embassy_net::{Config as NetConfig, Runner, Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
 use embedded_io_async::Write;
 use esp_backtrace as _;
 use esp_hal::{
-    clock::CpuClock, interrupt::software::SoftwareInterruptControl, psram, rng::Rng,
+    clock::CpuClock, interrupt::software::SoftwareInterruptControl, rng::Rng,
     timer::timg::TimerGroup,
 };
 use esp_println::println;
@@ -36,17 +34,17 @@ macro_rules! mk_static {
 
 #[embassy_executor::task]
 async fn connection_task(mut controller: WifiController<'static>) {
-    println!("[wifi] Starting connection task");
+    println!("[example] Starting connection task");
     loop {
-        println!("[wifi] Connecting to SSID: {}...", WIFI_SSID);
+        println!("[example] Connecting to SSID: {}...", WIFI_SSID);
         match controller.connect_async().await {
             Ok(info) => {
-                println!("[wifi] ✅ Connected: {:?}", info);
+                println!("[example] ✅ Connected: {:?}", info);
                 let reason = controller.wait_for_disconnect_async().await.ok();
-                println!("[wifi] ⚠️ Disconnected: {:?}", reason);
+                println!("[example] ⚠️ Disconnected: {:?}", reason);
             }
             Err(e) => {
-                println!("[wifi] ❌ Failed to connect: {:?}, retrying...", e);
+                println!("[example] ❌ Failed to connect: {:?}, retrying...", e);
             }
         }
         Timer::after(Duration::from_secs(5)).await;
@@ -60,44 +58,29 @@ async fn net_task(mut runner: Runner<'static, Interface>) -> ! {
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
-    println!("--------------------------------------------------");
-    println!("[app] Bootstrapping camera firmware application");
-
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_240MHz);
     let peripherals = esp_hal::init(config);
-
-    // Два хипа как в официальном примере
-    esp_alloc::heap_allocator!(size: 64 * 1024);
-    esp_alloc::heap_allocator!(size: 36 * 1024);
-
-    // PSRAM для буферов камеры
-    let _psram = psram::Psram::new(peripherals.PSRAM, psram::PsramConfig::default());
-    unsafe {
-        esp_alloc::HEAP.add_region(esp_alloc::HeapRegion::new(
-            0x3D00_0000 as *mut u8,
-            8 * 1024 * 1024,
-            esp_alloc::MemoryCapability::External.into(),
-        ));
-    }
-
-    println!(
-        "[RAM] Total free heap: {} KB",
-        esp_alloc::HEAP.free() / 1024
-    );
-
-    // Scheduler
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
-    // Камера
-    // let pclk_pin_for_verify =
-    //     esp_hal::gpio::Input::new(peripherals.GPIO13, esp_hal::gpio::InputConfig::default());
-    let platform = Esp32S3::new(
+    esp_alloc::heap_allocator!(size: 72 * 1024);
+    let psram =
+        esp_hal::psram::Psram::new(peripherals.PSRAM, esp_hal::psram::PsramConfig::default());
+    let (psram_ptr, psram_size) = psram.raw_parts();
+    println!(
+        "[example] PSRAM at {:p} ({} KB total)",
+        psram_ptr,
+        psram_size / 1024
+    );
+
+    // let psram_frame_buf: &'static mut [u8] =
+    //     unsafe { core::slice::from_raw_parts_mut(psram_ptr, 512 * 1024) };
+
+    let board = Esp32S3::new(
         peripherals.LCD_CAM,
         peripherals.DMA_CH0,
         peripherals.GPIO15, // xclk
-        // pclk_pin_for_verify, // pclk для verify
         peripherals.GPIO13, // pclk для camera
         peripherals.GPIO6,  // vsync
         peripherals.GPIO7,  // href
@@ -111,12 +94,23 @@ async fn main(spawner: Spawner) -> ! {
             peripherals.GPIO17, // data6
             peripherals.GPIO16, // data7
         ),
+        // psram_frame_buf,
     );
-    let sensor = Ov5640::new(peripherals.I2C0, peripherals.GPIO4, peripherals.GPIO5)
-        .expect("Failed to create OV5640 instance");
-    let mut camera = Camera::init(platform, sensor).expect("Failed to initialize camera");
 
-    // WiFi
+    let camera = Ov5640::new(peripherals.I2C0, peripherals.GPIO4, peripherals.GPIO5)
+        .expect("Failed to create OV5640 instance");
+
+    let mut _driver = match Driver::new(board, camera) {
+        Ok(driver) => driver,
+        Err(err) => {
+            println!("[example] Camera initialization failed: {:?}", err);
+
+            loop {
+                embassy_time::Timer::after_secs(1).await;
+            }
+        }
+    };
+
     let station_config = Config::Station(
         StationConfig::default()
             .with_ssid(WIFI_SSID)
@@ -129,8 +123,6 @@ async fn main(spawner: Spawner) -> ! {
         ControllerConfig::default().with_initial_config(station_config),
     )
     .unwrap();
-
-    println!("Wifi configured and started!");
 
     let net_config = NetConfig::dhcpv4(Default::default());
     let rng = Rng::new();
@@ -148,14 +140,14 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(connection_task(controller).unwrap());
     spawner.spawn(net_task(runner).unwrap());
 
-    println!("[net] Waiting for DHCP IP address...");
     stack.wait_config_up().await;
 
     if let Some(config) = stack.config_v4() {
-        println!("--------------------------------------------------");
-        println!("[net] ✅ IP Address: {}", config.address);
-        println!("[net] 🌐 Stream URL: http://{}/", config.address.address());
-        println!("--------------------------------------------------");
+        println!("[example] ✅ IP Address: {}", config.address);
+        println!(
+            "[example] 🌐 Stream URL: http://{}/",
+            config.address.address()
+        );
     }
 
     let mut rx_buffer = [0u8; 1024];
@@ -166,49 +158,45 @@ async fn main(spawner: Spawner) -> ! {
         socket.set_timeout(Some(Duration::from_secs(10)));
 
         if let Err(e) = socket.accept(80).await {
-            println!("[http] Accept error: {:?}", e);
+            println!("[example] Accept error: {:?}", e);
             continue;
         }
 
-        println!("[http] Client connected!");
+        println!("[example] Client connected!");
 
         let header = "HTTP/1.1 200 OK\r\n\
-                      Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\
-                      Access-Control-Allow-Origin: *\r\n\
-                      Connection: close\r\n\r\n";
+              Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
+        socket.write_all(header.as_bytes()).await.ok();
+        println!("[example] Headers sent! Starting stream loop...");
 
-        if socket.write_all(header.as_bytes()).await.is_err() {
-            println!("[http] Failed to write HTTP header");
-            continue;
-        }
+        // loop {
+        //     println!("[example] Requesting capture()...");
 
-        loop {
-            let mut frame_buf = [0u8; 65536];
-            match camera.capture(&mut frame_buf) {
-                Ok(len) => {
-                    let part_header = alloc::format!(
-                        "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
-                        len
-                    );
+        //     match driver.capture() {
+        //         Ok(frame) => {
+        //             println!("[example] Frame captured! Size: {} bytes", frame.len());
 
-                    if socket.write_all(part_header.as_bytes()).await.is_err() {
-                        break;
-                    }
+        //             let frame_header = alloc::format!(
+        //                 "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
+        //                 frame.len()
+        //             );
 
-                    if socket.write_all(&frame_buf[..len]).await.is_err() {
-                        break;
-                    }
-
-                    if socket.write_all(b"\r\n").await.is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("[http] camera.capture() error: {:?}", e);
-                    break;
-                }
-            }
-        }
+        //             if socket.write_all(frame_header.as_bytes()).await.is_err() {
+        //                 break;
+        //             }
+        //             if socket.write_all(frame).await.is_err() {
+        //                 break;
+        //             }
+        //             if socket.write_all(b"\r\n").await.is_err() {
+        //                 break;
+        //             }
+        //         }
+        //         Err(e) => {
+        //             println!("[example] Capture error: {:?}", e);
+        //             embassy_time::Timer::after_millis(50).await;
+        //         }
+        //     }
+        // }
 
         println!("[http] Client disconnected.");
     }

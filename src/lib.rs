@@ -1,50 +1,68 @@
-// lib.rs
-
 #![no_std]
 
-pub mod platform;
-pub mod sensor;
+pub mod board;
+pub mod camera;
 
+use board::Board;
+use camera::Camera;
 use esp_println::println;
-use platform::Platform;
-use sensor::Sensor;
 
 #[derive(Debug)]
-pub enum CameraError<PE, SE> {
-    PlatformError(PE),
-    SensorError(SE),
+pub enum DriverError<BE, CE> {
+    BoardError(BE),
+    CameraError(CE),
 }
 
-pub struct Camera<P, S> {
-    pub platform: P,
-    pub sensor: S,
+pub struct Driver<B, C> {
+    pub board: B,
+    pub camera: C,
 }
 
-impl<P, S> Camera<P, S>
+impl<B, C> Driver<B, C>
 where
-    P: Platform,
-    S: Sensor,
+    B: Board,
+    C: Camera,
 {
-    pub fn init(mut platform: P, mut sensor: S) -> Result<Self, CameraError<P::Error, S::Error>> {
-        platform
-            .xclk_on(20_000_000)
-            .map_err(CameraError::PlatformError)?;
+    pub fn new(mut board: B, mut camera: C) -> Result<Self, DriverError<B::Error, C::Error>> {
+        println!("[driver]--------------------------------------------");
 
-        // Ждём стабилизации clock
-        esp_hal::delay::Delay::new().delay_millis(100);
-        println!("[camera] ⏱ Waiting for sensor stabilization...");
+        board.xclk_on(20_000_000).map_err(DriverError::BoardError)?;
 
-        // Инициализация сенсора: проверка Chip ID + активация DVP
-        sensor.init().map_err(CameraError::SensorError)?;
+        println!("[driver] Waiting {}ms for sensor stabilization...", 1);
+        esp_hal::delay::Delay::new().delay_millis(1);
 
-        // Проверка PCLK
-        platform.verify_pclk().map_err(CameraError::PlatformError)?;
+        camera.enable().map_err(DriverError::CameraError)?;
+        // camera.init().map_err(DriverError::CameraError)?;
 
-        Ok(Self { platform, sensor })
-    }
-    pub fn capture(&mut self, buf: &mut [u8]) -> Result<usize, CameraError<P::Error, S::Error>> {
-        self.platform
-            .capture_frame(buf)
-            .map_err(CameraError::PlatformError)
+        camera
+            .write_sensor_table()
+            .map_err(DriverError::CameraError)?;
+
+        // println!("[driver] ⏳ Verifying camera hardware pipeline...");
+        // let _frame = board.capture().map_err(DriverError::BoardError)?;
+        // println!("[driver] ✅ Hardware initialization complete! Frame captured.");
+
+        // board.activate_pipeline().map_err(DriverError::BoardError)?;
+
+        match board.capture_frame() {
+            Ok(frame) => {
+                println!(
+                    "[driver] ✅ Test frame captured! Size: {} bytes",
+                    frame.len()
+                );
+                if frame.len() >= 2 && frame[0] == 0xFF && frame[1] == 0xD8 {
+                    println!("[driver] 🎉 Valid JPEG header (0xFFD8) confirmed!");
+                } else {
+                    println!("[driver] ⚠️ Frame received, but JPEG header missing!");
+                }
+            }
+            Err(e) => {
+                println!("[driver] ❌ Test frame capture failed: {:?}", e);
+            }
+        }
+
+        println!("[driver]--------------------------------------------");
+
+        Ok(Self { board, camera })
     }
 }
