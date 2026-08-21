@@ -10,3 +10,6 @@ target = "xtensa-esp32s3-none-elf"
 
 [unstable]
 build-std = ["core", "alloc"]
+
+# [env]
+# ESP_HAL_CONFIG_PSRAM_MODE = "octal"

@@ -2,8 +2,8 @@
 #![no_main]
 
 use camera_rs::Driver;
-use camera_rs::board::esp32s3::Esp32S3;
 use camera_rs::camera::ov5640::Ov5640;
+use camera_rs::chip::esp32s3::Esp32S3;
 use embassy_executor::Spawner;
 use embassy_net::{Config as NetConfig, Runner, Stack, StackResources, tcp::TcpSocket};
 use embassy_time::{Duration, Timer};
@@ -63,16 +63,16 @@ async fn main(spawner: Spawner) -> ! {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
+    esp_alloc::heap_allocator!(size: 64 * 1024);
 
-    esp_alloc::heap_allocator!(size: 72 * 1024);
-    let psram =
-        esp_hal::psram::Psram::new(peripherals.PSRAM, esp_hal::psram::PsramConfig::default());
-    let (psram_ptr, psram_size) = psram.raw_parts();
-    println!(
-        "[example] PSRAM at {:p} ({} KB total)",
-        psram_ptr,
-        psram_size / 1024
-    );
+    // let psram =
+    //     esp_hal::psram::Psram::new(peripherals.PSRAM, esp_hal::psram::PsramConfig::default());
+    // let (psram_ptr, psram_size) = psram.raw_parts();
+    // println!(
+    //     "[example] PSRAM at {:p} ({} KB total)",
+    //     psram_ptr,
+    //     psram_size / 1024
+    // );
 
     // let psram_frame_buf: &'static mut [u8] =
     //     unsafe { core::slice::from_raw_parts_mut(psram_ptr, 512 * 1024) };
@@ -96,7 +96,6 @@ async fn main(spawner: Spawner) -> ! {
         ),
         // psram_frame_buf,
     );
-
     let camera = Ov5640::new(peripherals.I2C0, peripherals.GPIO4, peripherals.GPIO5)
         .expect("Failed to create OV5640 instance");
 
@@ -116,30 +115,24 @@ async fn main(spawner: Spawner) -> ! {
             .with_ssid(WIFI_SSID)
             .with_password(WIFI_PASS.into()),
     );
-
     let wifi_interface = esp_radio::wifi::Interface::station();
     let controller = esp_radio::wifi::WifiController::new(
         peripherals.WIFI,
         ControllerConfig::default().with_initial_config(station_config),
     )
     .unwrap();
-
     let net_config = NetConfig::dhcpv4(Default::default());
     let rng = Rng::new();
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
-
     let (stack, runner) = embassy_net::new(
         wifi_interface,
         net_config,
         mk_static!(StackResources<5>, StackResources::<5>::new()),
         seed,
     );
-
     let stack = mk_static!(Stack<'static>, stack);
-
     spawner.spawn(connection_task(controller).unwrap());
     spawner.spawn(net_task(runner).unwrap());
-
     stack.wait_config_up().await;
 
     if let Some(config) = stack.config_v4() {
