@@ -215,10 +215,7 @@ impl Esp32S3Eye {
         let reg_bytes = [(CHIP_ID_REG >> 8) as u8, (CHIP_ID_REG & 0xFF) as u8];
 
         if i2c.write_read(I2C_ADDR, &reg_bytes, &mut chip_id).is_ok() {
-            println!(
-                "[board] Detected sensor Chip ID: 0x{:02X}{:02X}",
-                chip_id[0], chip_id[1]
-            );
+            println!("[board] Chip ID: 0x{:02X}{:02X}", chip_id[0], chip_id[1]);
         } else {
             println!("[board] ERROR: Camera sensor not responding via I2C!");
         }
