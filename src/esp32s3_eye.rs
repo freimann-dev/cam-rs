@@ -1,5 +1,7 @@
 extern crate alloc;
 
+use crate::{BoardError, BoardResult, Frame};
+
 // use esp_alloc::{HEAP, HeapRegion, MemoryCapability};
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
@@ -174,7 +176,7 @@ static SENSOR_DEFAULT_REGS: &[(u16, u16)] = &[
 ];
 
 #[derive(Debug)]
-pub enum Esp32S3Error {
+pub enum Esp32S3EyeError {
     NotInitialized,
     XclkConfigFailed,
     CaptureFailed,
@@ -188,9 +190,7 @@ pub enum Esp32S3Error {
 pub struct Esp32S3Eye {}
 
 impl Esp32S3Eye {
-    pub fn new() -> Self {
-        println!("[board]------------------------------------------------");
-
+    pub fn new() -> Result<Self, Esp32S3EyeError> {
         let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_240MHz);
         let peripherals = esp_hal::init(config);
 
@@ -234,17 +234,16 @@ impl Esp32S3Eye {
 
         //-------------------------------------------------------
 
-        println!("[board] before psram_allocator");
-
-        esp_alloc::heap_allocator!(size: 64 * 1024);
         // esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
-        println!("[board] after psram_allocator");
-
+        //-------------------------------------------------------
         let stats = esp_alloc::HEAP.stats();
         println!("{}", stats);
-        //-------------------------------------------------------
 
-        Self {}
+        Ok(Self {})
+    }
+
+    pub fn capture(&mut self) -> BoardResult<Frame> {
+        Err(BoardError::CaptureFailed)
     }
 }

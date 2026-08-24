@@ -13,10 +13,10 @@ esp-hal =                   "=1.1.2"
 esp-println =               "=0.17.0"
 # static_cell = "2.1"
 
-# esp32s3 = "=0.36.0"
+# esp32s3 = "=0.35.2"
 
 [features]
-default = ["esp32"]
+default = ["esp32s3"]
 
 esp32 = [
     "esp-alloc/esp32",
@@ -31,7 +31,6 @@ esp32 = [
     "esp-println/log-04",
 ]
 esp32s3 = [
-    "esp-alloc/esp32s3",
     "esp-backtrace/esp32s3",
     "esp-backtrace/panic-handler",
     "esp-backtrace/println",

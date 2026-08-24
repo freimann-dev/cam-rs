@@ -18,7 +18,7 @@ pub enum BoardError {
     Esp32CamInit(esp32_cam::Esp32CamError),
 
     #[cfg(feature = "esp32s3")]
-    Esp32S3Init(esp32s3_eye::Esp32S3Error),
+    Esp32S3Init(esp32s3_eye::Esp32S3EyeError),
 }
 
 #[cfg(feature = "esp32")]
@@ -29,8 +29,8 @@ impl From<esp32_cam::Esp32CamError> for BoardError {
 }
 
 #[cfg(feature = "esp32s3")]
-impl From<esp32s3_eye::Esp32S3Error> for BoardError {
-    fn from(err: esp32s3_eye::Esp32S3Error) -> Self {
+impl From<esp32s3_eye::Esp32S3EyeError> for BoardError {
+    fn from(err: esp32s3_eye::Esp32S3EyeError) -> Self {
         BoardError::Esp32S3Init(err)
     }
 }
