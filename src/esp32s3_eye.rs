@@ -1,9 +1,8 @@
 extern crate alloc;
 
-use crate::{BoardError, BoardResult, Frame};
+use crate::{BoardError, Frame};
 
 // use esp_alloc::{HEAP, HeapRegion, MemoryCapability};
-use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::lcd_cam::{
@@ -190,10 +189,14 @@ pub enum Esp32S3EyeError {
 pub struct Esp32S3Eye {}
 
 impl Esp32S3Eye {
-    pub fn new() -> Result<Self, Esp32S3EyeError> {
-        let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_240MHz);
+    pub fn init() -> Result<Self, Esp32S3EyeError> {
+        // 1. Возвращаем чистый, дефолтный конфигурационный билдер HAL
+        let config = esp_hal::Config::default().with_cpu_clock(esp_hal::clock::CpuClock::_240MHz);
+
+        // Инициализируем HAL (без внутренней привязки полей)
         let peripherals = esp_hal::init(config);
 
+        // --- Инициализация камеры и I2C остается БЕЗ изменений ---
         let lcd_cam = LcdCam::new(peripherals.LCD_CAM);
         let cam_config = CamConfig::default().with_frequency(Rate::from_mhz(20));
         let _cam_clk = Camera::new(lcd_cam.cam, peripherals.DMA_CH0, cam_config)
@@ -233,17 +236,43 @@ impl Esp32S3Eye {
         println!("[board] OV5640 setup complete!");
 
         //-------------------------------------------------------
+        // --- Финальная ручная привязка памяти к аллокатору ---
+        let psram_config = esp_hal::psram::PsramConfig {
+            mode: esp_hal::psram::PsramMode::OctalSpi,
+            ram_frequency: esp_hal::psram::SpiRamFreq::Freq80m, // Стабильные 80MHz!
+            flash_frequency: esp_hal::psram::FlashFreq::FlashFreq80m,
+            size: esp_hal::psram::PsramSize::Size(8 * 1024 * 1024), // 8 МБ PSRAM
+            core_clock: Some(
+                esp_hal::psram::SpiTimingConfigCoreClock::SpiTimingConfigCoreClock160m,
+            ),
+        };
 
-        // esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
+        println!("[board] Инициализация физического драйвера PSRAM...");
 
+        // 1. Драйвер настраивает контроллер шины ровно ОДИН раз.
+        // Передаем peripherals.PSRAM, возвращаемый объект не даем макросу трогать
+        let _psram_hardware = esp_hal::psram::Psram::new(peripherals.PSRAM, psram_config);
+
+        println!("[board] Аппаратный тюнинг завершен. Подключаем память к куче...");
+
+        unsafe {
+            esp_alloc::HEAP.add_region(esp_alloc::HeapRegion::new(
+                0x3C00_0000 as *mut u8, // Сдвигаем на истинное начало пула PSRAM
+                8 * 1024 * 1024,        // Все 8 МБ
+                esp_alloc::MemoryCapability::External.into(),
+            ));
+        }
+
+        println!("[board] Ура! 8 МБ PSRAM успешно добавлены в глобальный аллокатор!");
         //-------------------------------------------------------
+
         let stats = esp_alloc::HEAP.stats();
-        println!("{}", stats);
+        println!("[board] Статистика кучи: {:?}", stats);
 
         Ok(Self {})
     }
 
-    pub fn capture(&mut self) -> BoardResult<Frame> {
+    pub fn capture(&mut self) -> Result<Frame, BoardError> {
         Err(BoardError::CaptureFailed)
     }
 }

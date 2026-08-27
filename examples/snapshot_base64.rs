@@ -15,7 +15,7 @@ use esp_println::println;
 fn main() -> ! {
     println!("[example]------------------------------------");
 
-    let _board = Board::new();
+    let _board = Board::init();
 
     // let camera = Ov5640::new();
 

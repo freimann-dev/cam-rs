@@ -4,6 +4,7 @@
 pub mod esp32_cam;
 #[cfg(feature = "esp32s3")]
 pub mod esp32s3_eye;
+pub mod sensors;
 
 pub type BoardResult<T> = Result<T, BoardError>;
 
@@ -46,12 +47,12 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new() -> BoardResult<Self> {
+    pub fn init() -> BoardResult<Self> {
         esp_alloc::heap_allocator!(size: 64 * 1024);
 
         Ok(Self {
             #[cfg(feature = "esp32s3")]
-            inner: esp32s3_eye::Esp32S3Eye::new()?,
+            inner: esp32s3_eye::Esp32S3Eye::init()?,
 
             #[cfg(feature = "esp32")]
             inner: esp32_cam::Esp32Cam::new()?,
