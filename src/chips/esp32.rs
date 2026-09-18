@@ -1,4 +1,4 @@
-extern crate alloc;
+// extern crate alloc;
 
 use crate::{BoardError, BoardResult, Frame};
 

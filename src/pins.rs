@@ -20,7 +20,7 @@ pub struct Pins<'a> {
     pub scl: AnyPin<'a>,
 }
 
-pub fn s3_eye(p: Peripherals) -> Pins<'static> {
+pub fn s3eye(p: Peripherals) -> Pins<'static> {
     Pins {
         mclk: AnyPin::from(p.GPIO15),
         pclk: AnyPin::from(p.GPIO13),

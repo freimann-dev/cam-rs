@@ -1,15 +1,15 @@
 pub mod esp32s3;
 
-use crate::CameraError;
-use crate::CameraResult;
+use crate::BoardError;
+use crate::BoardResult;
 
 pub trait Chip<P> {
     type I2c;
+    type Camera;
 
-    fn init(&mut self, periph: P) -> CameraResult<Self::I2c>;
+    fn new(&mut self, gpio: P) -> BoardResult<(Self::I2c, Self::Camera)>;
+    fn check_vsync(&self) -> Result<bool, BoardError>;
 
-    fn check_vsync(&self) -> Result<bool, CameraError>;
-
-    fn setup_dma(&mut self) -> CameraResult<()>;
+    fn setup_dma(&mut self) -> BoardResult<()>;
     fn name(&self) -> &'static str;
 }
