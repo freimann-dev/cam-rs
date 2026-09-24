@@ -1,10 +1,23 @@
 pub mod ov5640;
-use crate::BoardResult;
+
+use esp_hal::Blocking;
+use esp_hal::i2c::master::I2c;
+
+#[derive(Debug, Clone, Copy)]
+pub enum SensorError {
+    I2cError,
+    SensorMismatch(u16),
+}
+
+pub type SensorResult<T> = Result<T, SensorError>;
+
+impl<E: embedded_hal::i2c::Error> From<E> for SensorError {
+    fn from(_: E) -> Self {
+        SensorError::I2cError
+    }
+}
 
 pub trait Sensor {
-    const I2C_ADDR: u8;
-
-    fn new<I2C>(&mut self, i2c: &mut I2C) -> BoardResult<()>
-    where
-        I2C: embedded_hal::i2c::I2c;
+    fn new() -> Self;
+    fn init(&mut self, i2c: &mut I2c<'_, Blocking>) -> SensorResult<()>;
 }

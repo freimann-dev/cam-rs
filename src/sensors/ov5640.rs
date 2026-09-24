@@ -1,28 +1,29 @@
-use crate::Sensor;
-use crate::{BoardError, BoardResult};
+use crate::sensors::{Sensor, SensorResult};
+use esp_hal::Blocking;
 use esp_hal::delay::Delay;
+use esp_hal::i2c::master::I2c;
+use esp_println::println;
 
-#[derive(Debug, Clone, Default)]
-pub struct Ov5640;
+const I2C_ADDR: u8 = 0x3C;
+
+pub struct Ov5640 {
+    // публичные поля состояния, юзер читает/пишет напрямую
+}
 
 impl Sensor for Ov5640 {
-    const I2C_ADDR: u8 = 0x3C;
+    fn new() -> Self {
+        Self {}
+    }
 
-    fn new<I2C>(&mut self, i2c: &mut I2C) -> BoardResult<()>
-    where
-        I2C: embedded_hal::i2c::I2c,
-    {
+    fn init(&mut self, i2c: &mut I2c<'_, Blocking>) -> SensorResult<()> {
         let mut id_bytes = [0u8; 2];
-        i2c.write_read(0x3C, &[0x30, 0x0A], &mut id_bytes[0..1])?;
-        i2c.write_read(0x3C, &[0x30, 0x0B], &mut id_bytes[1..2])?;
+        i2c.write_read(I2C_ADDR, &[0x30, 0x0A], &mut id_bytes)?;
 
         let read_id = ((id_bytes[0] as u16) << 8) | (id_bytes[1] as u16);
-
         if read_id != 0x5640 {
-            return Err(BoardError::SensorMismatch(read_id));
+            return Err(crate::sensors::SensorError::SensorMismatch(read_id));
         }
-
-        esp_println::println!("[sensor] OV5640 ID match: 0x{:04X}", read_id);
+        println!("[sensor] OV5640 ID match: 0x{:04X}", read_id);
 
         const REG_DLY: u16 = 0xFFFF;
 
@@ -195,7 +196,7 @@ impl Sensor for Ov5640 {
                 delay.delay_millis(entry[1] as u32);
             } else {
                 let bytes = [(reg >> 8) as u8, reg as u8, val];
-                i2c.write(Self::I2C_ADDR, &bytes)?;
+                i2c.write(I2C_ADDR, &bytes)?;
             }
         }
 

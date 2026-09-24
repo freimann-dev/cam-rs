@@ -1,7 +1,8 @@
 #![no_std]
 #![no_main]
 
-use cam_rs::{Board, Esp32S3, pins::s3eye, sensors::ov5640::Ov5640};
+use cam_rs::Esp32S3Eye;
+use cam_rs::sensors::ov5640::Ov5640;
 use esp_backtrace as _;
 use esp_hal::main;
 use esp_println::println;
@@ -12,13 +13,12 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     let p = esp_hal::init(esp_hal::Config::default());
 
-    let chip = Esp32S3::new();
-    let sensor = Ov5640::default();
-    let pins = s3eye(p);
-
-    match Board::new(chip, pins, sensor) {
-        Ok(_cam) => println!("[EXAMPLE] Board successfully initialized!"),
-        Err(_) => println!("[EXAMPLE] Failed to initialize board!"),
+    match Esp32S3Eye::init::<Ov5640>(p) {
+        Ok((_board, _sensor)) => {
+            println!("[EXAMPLE] ESP32-S3-EYE fully initialized!");
+            // board.i2c и board.camera доступны напрямую
+        }
+        Err(e) => println!("[EXAMPLE] Failed: {:?}", e),
     }
 
     loop {
