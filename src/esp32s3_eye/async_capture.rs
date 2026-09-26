@@ -33,6 +33,12 @@ impl Esp32S3Eye {
         let rx_buf =
             DmaRxBuf::new(aligned_descs, aligned_data).map_err(|_| BoardError::InitFailed)?;
 
+        let lcd_cam_regs = unsafe { &*esp_hal::peripherals::LCD_CAM::PTR };
+        esp_println::println!(
+            "cam_vs_eof_en перед receive(): {}",
+            lcd_cam_regs.cam_ctrl().read().cam_vs_eof_en().bit()
+        );
+
         let mut transfer = camera.receive(rx_buf).map_err(|_| BoardError::InitFailed)?;
 
         transfer

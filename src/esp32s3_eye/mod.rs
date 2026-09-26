@@ -1,5 +1,5 @@
+pub mod async_capture;
 pub mod capture;
-pub mod capture_internal;
 pub mod init;
 
 use esp_hal::i2c::master::I2c;

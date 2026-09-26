@@ -4,13 +4,15 @@ use esp_hal::delay::Delay;
 use esp_hal::dma::DmaChannel;
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::lcd_cam::LcdCam;
-use esp_hal::lcd_cam::cam::{Camera, Config};
+use esp_hal::lcd_cam::cam::{Camera, Config, EofMode};
 use esp_hal::peripherals::Peripherals;
 use esp_hal::psram::{Psram, PsramConfig};
 use esp_hal::time::Rate;
 use esp_println::println;
 
 use super::Esp32S3Eye;
+
+const FRAME_SIZE: usize = 160 * 120 * 2;
 
 impl Esp32S3Eye {
     pub fn init<S: Sensor>(p: Peripherals) -> BoardResult<(Self, S)> {
@@ -28,7 +30,9 @@ impl Esp32S3Eye {
         let camera = Camera::new(
             lcd_cam.cam,
             rx_channel,
-            Config::default().with_frequency(Rate::from_mhz(20)),
+            Config::default()
+                .with_frequency(Rate::from_mhz(20))
+                .with_eof_mode(EofMode::ByteLen((FRAME_SIZE - 1) as u16)),
         )
         .map_err(|_| BoardError::ChipInitFailed)?
         .with_master_clock(p.GPIO15)

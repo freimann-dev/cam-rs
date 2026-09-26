@@ -8,6 +8,8 @@ use esp_backtrace as _;
 use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 
+const EXPECTED_FRAME_SIZE: usize = 160 * 120 * 2;
+
 esp_bootloader_esp_idf::esp_app_desc!();
 
 #[esp_hal::main]
@@ -28,19 +30,19 @@ async fn main(_spawner: Spawner) {
     loop {
         match board.capture_internal().await {
             Ok(frame) => {
+                assert_eq!(frame.len(), EXPECTED_FRAME_SIZE, "unexpected frame size");
                 println!(
-                    "🎉 Кадр возвращен по прерыванию VSYNC! Адрес буфера: {:p}, Размер: {} байт",
-                    frame.as_ptr(),
-                    frame.len()
+                    "🎉 frame: {}x{} RGB565, {} bytes (matches expected size), addr {:p}",
+                    160,
+                    120,
+                    frame.len(),
+                    frame.as_ptr()
                 );
-
                 if frame.len() >= 4 {
-                    println!("Живой заголовок пикселей: {:02X?}", &frame[0..4]);
+                    println!("pixels[0..4]: {:02X?}", &frame[0..4]);
                 }
             }
-            Err(e) => {
-                println!("❌ Сбой асинхронного захвата: {:?}", e);
-            }
+            Err(e) => println!("❌ capture error: {:?}", e),
         }
     }
 }
